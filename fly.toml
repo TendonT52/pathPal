@@ -1,0 +1,40 @@
+app            = "pathpal"
+primary_region = "sin"  # Singapore — closest to Bangkok
+
+[build]
+
+[env]
+  DATABASE_URL          = "sqlite:////data/pathpal.db"
+  SEGMENT_DWELL_MINUTES = "15"
+  MATCH_RADIUS_METERS   = "300"
+  MATCH_SCORE_THRESHOLD = "0.75"
+
+# SECRET_KEY is set via: fly secrets set SECRET_KEY=...
+# Never put secrets in this file.
+
+[[mounts]]
+  source      = "pathpal_data"
+  destination = "/data"
+
+[http_service]
+  internal_port        = 5000
+  force_https          = true
+  auto_stop_machines   = true
+  auto_start_machines  = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type       = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+  [[http_service.checks]]
+    grace_period = "5s"
+    interval     = "15s"
+    method       = "GET"
+    timeout      = "2s"
+    path         = "/api/health"
+
+[[vm]]
+  size   = "shared-cpu-1x"
+  memory = "256mb"

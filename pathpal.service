@@ -1,0 +1,12 @@
+[Unit]
+Description=PathPal Flask Backend
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/home/pathpal/pathpal-backend
+ExecStart=/usr/local/bin/gunicorn --bind 0.0.0.0:5000 --workers 2 app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+.env
+pathpal.db
+instance/
+.git/
+tests/
+*.md
+validation_data_cleaned.json
+seed.py
+.pytest_cache/

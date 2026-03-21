@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PathPal Dev UI</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: monospace; font-size: 13px; display: flex; height: 100vh; overflow: hidden; background: #1a1a2e; color: #e0e0e0; }
+
+  /* Sidebar */
+  #sidebar { width: 340px; min-width: 340px; display: flex; flex-direction: column; background: #16213e; border-right: 1px solid #0f3460; overflow-y: auto; }
+
+  #sidebar-header { padding: 12px 16px; background: #0f3460; color: #e94560; font-size: 16px; font-weight: bold; letter-spacing: 1px; border-bottom: 1px solid #e94560; flex-shrink: 0; }
+  #sidebar-header span { color: #e0e0e0; font-size: 11px; display: block; margin-top: 2px; font-weight: normal; }
+
+  #token-bar { padding: 10px 16px; background: #0a1628; border-bottom: 1px solid #0f3460; flex-shrink: 0; }
+  #token-bar label { color: #888; display: block; margin-bottom: 4px; }
+  #token-display { background: #16213e; border: 1px solid #0f3460; color: #4ade80; padding: 5px 8px; width: 100%; font-size: 11px; border-radius: 3px; word-break: break-all; min-height: 28px; cursor: pointer; }
+  #token-display:hover { border-color: #4ade80; }
+
+  /* Sections */
+  .section { border-bottom: 1px solid #0f3460; }
+  .section-header { padding: 10px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; background: #16213e; transition: background 0.15s; }
+  .section-header:hover { background: #1a2744; }
+  .section-header .title { color: #60a5fa; font-weight: bold; }
+  .section-header .arrow { color: #555; transition: transform 0.2s; font-size: 10px; }
+  .section-header.open .arrow { transform: rotate(90deg); }
+  .section-body { display: none; padding: 12px 16px; background: #0d1b2a; }
+  .section-body.open { display: block; }
+
+  /* Form elements */
+  label { color: #888; display: block; margin-bottom: 3px; margin-top: 8px; }
+  label:first-child { margin-top: 0; }
+  input[type=text], textarea, select {
+    width: 100%; background: #16213e; border: 1px solid #0f3460; color: #e0e0e0;
+    padding: 6px 8px; border-radius: 3px; font-family: monospace; font-size: 12px;
+  }
+  input[type=text]:focus, textarea:focus { outline: none; border-color: #60a5fa; }
+  textarea { resize: vertical; min-height: 70px; }
+  input[type=checkbox] { margin-right: 5px; }
+
+  button.btn {
+    margin-top: 10px; width: 100%; padding: 7px; background: #0f3460; color: #60a5fa;
+    border: 1px solid #60a5fa; border-radius: 3px; cursor: pointer; font-family: monospace;
+    font-size: 12px; transition: all 0.15s;
+  }
+  button.btn:hover { background: #60a5fa; color: #0d1b2a; }
+  button.btn.danger { border-color: #e94560; color: #e94560; }
+  button.btn.danger:hover { background: #e94560; color: #fff; }
+  button.btn.success { border-color: #4ade80; color: #4ade80; }
+  button.btn.success:hover { background: #4ade80; color: #0d1b2a; }
+
+  .result { margin-top: 8px; background: #0a1628; border: 1px solid #0f3460; border-radius: 3px; font-size: 11px; max-height: 320px; overflow-y: auto; }
+  .result.error { border-color: #e94560; }
+  .result.ok    { border-color: #4ade80; }
+
+  .json-tabs { display: flex; border-bottom: 1px solid #0f3460; flex-shrink: 0; }
+  .json-tab {
+    padding: 4px 10px; background: none; border: none; border-bottom: 2px solid transparent;
+    color: #555; font-family: monospace; font-size: 11px; cursor: pointer; letter-spacing: 0.5px;
+  }
+  .json-tab:hover { color: #aaa; }
+  .json-tab.active { color: #60a5fa; border-bottom-color: #60a5fa; }
+  .json-panel { padding: 8px; }
+  .jn { display: flex; align-items: baseline; gap: 3px; line-height: 1.65; white-space: nowrap; }
+  .jn:hover { background: rgba(255,255,255,0.03); border-radius: 2px; }
+  .jt { cursor: pointer; color: #4b5563; font-size: 9px; min-width: 10px; user-select: none; transition: transform 0.15s; flex-shrink: 0; }
+  .jt.open { transform: rotate(0deg); }
+  .jt.closed { transform: rotate(-90deg); }
+  .jk { color: #7dd3fc; }
+  .jcolon { color: #6b7280; }
+  .js { color: #4ade80; word-break: break-all; white-space: normal; }
+  .jn-num { color: #60a5fa; }
+  .jn-bool { color: #fb923c; }
+  .jn-null { color: #f87171; }
+  .jbrace { color: #e0e0e0; }
+  .jsummary { color: #4b5563; font-style: italic; }
+  .jcomma { color: #4b5563; }
+
+  .map-legend { padding: 8px 16px; background: #0a1628; border-top: 1px solid #0f3460; font-size: 11px; color: #666; flex-shrink: 0; }
+  .map-legend span { margin-right: 12px; }
+
+  .hint { color: #555; font-size: 11px; margin-top: 4px; }
+
+  .tip-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #1e3a5f; border: 1px solid #2563eb; color: #60a5fa;
+    font-size: 9px; font-weight: bold; cursor: help;
+    margin-left: 5px; vertical-align: middle; flex-shrink: 0;
+    line-height: 1; font-style: normal;
+  }
+  .tip-icon:hover { background: #2563eb; color: #fff; }
+
+  #tooltip {
+    position: fixed; z-index: 9999; pointer-events: none;
+    background: #0d1b2a; border: 1px solid #2563eb;
+    color: #c0d8f0; font-size: 11px; font-family: monospace;
+    padding: 7px 10px; border-radius: 5px;
+    max-width: 240px; line-height: 1.55;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.7);
+    display: none; white-space: normal;
+  }
+
+  /* GPS points panel */
+  #click-mode-bar {
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
+    background: rgba(10, 22, 40, 0.96); border-top: 2px solid #1a5e2a;
+    display: none; flex-direction: column; max-height: 240px;
+  }
+  #click-mode-bar.visible { display: flex; }
+  #cmb-header {
+    display: flex; align-items: center; gap: 10px; padding: 6px 12px;
+    border-bottom: 1px solid #0f3460; flex-shrink: 0;
+    font-size: 11px; color: #4ade80;
+  }
+  #cmb-header span { flex: 1; }
+  #cmb-header button {
+    padding: 2px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;
+    background: none; border: 1px solid #e94560; color: #e94560; font-family: monospace;
+  }
+  #cmb-header button:hover { background: #e94560; color: #fff; }
+  #cmb-list { overflow-y: auto; flex: 1; }
+  .cmb-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 12px; border-bottom: 1px solid #0a1628;
+    font-size: 11px; cursor: default; user-select: none;
+  }
+  .cmb-row:hover { background: #0f2035; }
+  .cmb-row.drag-over { border-top: 2px solid #60a5fa; }
+  .cmb-row.dragging { opacity: 0.35; }
+  .cmb-handle { color: #444; cursor: grab; font-size: 15px; line-height: 1; flex-shrink: 0; }
+  .cmb-handle:active { cursor: grabbing; }
+  .cmb-num { color: #3b82f6; font-weight: bold; min-width: 22px; flex-shrink: 0; }
+  .cmb-coords { flex: 1; color: #c0cfe0; }
+  .cmb-coords b { color: #e0e0e0; }
+  .cmb-ts { color: #444; flex-shrink: 0; font-size: 10px; }
+  .cmb-del {
+    background: none; border: 1px solid #7f1d1d; color: #fca5a5;
+    border-radius: 3px; cursor: pointer; padding: 1px 6px; font-size: 10px;
+    flex-shrink: 0; font-family: monospace;
+  }
+  .cmb-del:hover { background: #ef4444; color: #fff; border-color: #ef4444; }
+  .cmb-dist {
+    padding: 2px 12px 2px 50px; font-size: 10px; color: #2d6a40;
+    border-bottom: 1px solid #0a1628;
+  }
+
+  /* Map */
+  #map { flex: 1; position: relative; }
+
+  /* Clear map button */
+  #clear-map-btn {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 1000; padding: 6px 18px;
+    background: #0d1b2a; border: 1px solid #e94560; color: #e94560;
+    border-radius: 4px; font-family: monospace; font-size: 12px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  #clear-map-btn:hover { background: #e94560; color: #fff; }
+
+  /* Location search */
+  #search-box {
+    position: absolute; top: 12px; right: 12px; z-index: 1000;
+    display: flex; flex-direction: column; width: 260px;
+  }
+  #search-row { display: flex; gap: 4px; }
+  #search-input {
+    flex: 1; padding: 7px 10px; border-radius: 4px; border: 1px solid #0f3460;
+    background: #16213e; color: #e0e0e0; font-family: monospace; font-size: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  #search-input:focus { outline: none; border-color: #60a5fa; }
+  #search-btn {
+    padding: 7px 10px; border-radius: 4px; border: 1px solid #60a5fa;
+    background: #0f3460; color: #60a5fa; cursor: pointer; font-size: 13px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5); white-space: nowrap;
+  }
+  #search-btn:hover { background: #60a5fa; color: #0d1b2a; }
+  #search-results {
+    margin-top: 4px; background: #16213e; border: 1px solid #0f3460;
+    border-radius: 4px; max-height: 200px; overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.6); display: none;
+  }
+  .search-result-item {
+    padding: 7px 10px; cursor: pointer; font-size: 11px; color: #c0c0c0;
+    border-bottom: 1px solid #0f3460;
+  }
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-item:hover { background: #1a2744; color: #60a5fa; }
+  .search-result-item .place-name { font-weight: bold; color: #e0e0e0; }
+  #search-status { padding: 7px 10px; font-size: 11px; color: #888; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    PathPal Dev UI
+    <span>All API endpoints · Live map · No curl needed</span>
+  </div>
+
+  <div id="token-bar">
+    <label>Active Token (click to copy)</label>
+    <div id="token-display" onclick="copyToken()" title="Click to copy">—</div>
+  </div>
+
+  <!-- REGISTER -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">Register User</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <label>Username</label>
+      <input type="text" id="reg-username" placeholder="alice">
+      <label>Password</label>
+      <input type="password" id="reg-password" placeholder="••••••••">
+      <button class="btn success" onclick="doRegister()">POST /api/register</button>
+      <div class="result" id="reg-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- LOGIN -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">Login</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <label>Username</label>
+      <input type="text" id="login-username" placeholder="alice">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="••••••••">
+      <button class="btn" onclick="doLogin()">POST /api/login</button>
+      <div class="result" id="login-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- UPLOAD GPS -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">Upload GPS Points</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <label>Points (JSON array or one lat,lon,timestamp per line)</label>
+      <textarea id="gps-points" placeholder='{"lat":35.676,"lon":139.650,"ts":"2026-03-18T08:00:00"}&#10;— or click map to add points —'></textarea>
+      <div class="hint">Tip: enable "Click map to add" below, then click the map.</div>
+      <label><input type="checkbox" id="gps-click-mode" onchange="toggleClickMode()"> Click map to add points</label>
+      <div id="click-time-opts" style="display:none; margin-top:6px; padding:8px; background:#0a1628; border:1px solid #1a5e2a; border-radius:4px;">
+        <label style="color:#4ade80; margin-top:0">Simulated time per click</label>
+        <label style="margin-top:6px">Start datetime
+          <i class="tip-icon" onmouseenter="showTip(this,`The simulated date and time of your first map click. All subsequent points are offset from this base. Defaults to now when you enable click mode.`)" onmouseleave="hideTip()">?</i>
+        </label>
+        <input type="datetime-local" id="click-start-time" style="width:100%; background:#16213e; border:1px solid #0f3460; color:#e0e0e0; padding:5px 8px; border-radius:3px; font-family:monospace; font-size:12px;">
+        <label style="margin-top:8px">Minutes per click: <span id="click-step-val" style="color:#4ade80">1</span>
+          <i class="tip-icon" onmouseenter="showTip(this,`How many simulated minutes pass between each map click. Set to 20 or more to simulate dwelling at a stop — so the algorithm detects it as a stop. Set to 1 for dense travel-point simulation.`)" onmouseleave="hideTip()">?</i>
+        </label>
+        <input type="range" id="click-step" min="1" max="60" value="1" style="width:100%"
+               oninput="document.getElementById('click-step-val').textContent=this.value; rebuildTimestamps()">
+      </div>
+      <label><input type="checkbox" id="gps-auto-segment" checked> Auto-segment after upload</label>
+      <button class="btn" onclick="doUploadGps()">POST /api/gps</button>
+      <button class="btn danger" style="margin-top:4px" onclick="clearGpsInput()">Clear points textarea</button>
+      <div class="result" id="gps-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- VIEW GPS POINTS -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">View GPS Points</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <p class="hint">Fetches all stored GPS points and draws them on the map with a time gradient.</p>
+      <div style="display:flex; align-items:center; gap:6px; margin-top:6px; margin-bottom:2px;">
+        <span style="font-size:10px; color:#888;">Early</span>
+        <div style="flex:1; height:8px; border-radius:4px; background:linear-gradient(to right,hsl(220,90%,55%),hsl(160,90%,45%),hsl(60,90%,55%),hsl(0,90%,55%)); border:1px solid #1e3a5f;"></div>
+        <span style="font-size:10px; color:#888;">Late</span>
+      </div>
+      <label style="margin-top:8px;"><input type="checkbox" id="gps-pts-line" checked> Connect points with polyline</label>
+      <label><input type="checkbox" id="gps-pts-labels"> Show point numbers</label>
+      <button class="btn" onclick="doGetGpsPoints()">GET /api/gps_points</button>
+      <div class="result" id="gps-pts-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- SEGMENT NOW -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">Segment Now</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <p class="hint">Triggers segmentation for the active token.</p>
+      <button class="btn" onclick="doSegmentNow()">POST /api/segment_now</button>
+      <div class="result" id="seg-now-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- SEGMENT PREVIEW -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">Segment Preview</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <label>Dwell time (min): <span id="dwell-val">15</span>
+        <i class="tip-icon" onmouseenter="showTip(this,`How many minutes someone must stay within the stop radius to count as a stop. Raise it to require longer pauses; lower it to catch brief stops like a bus wait.`)" onmouseleave="hideTip()">?</i>
+      </label>
+      <input type="range" id="preview-dwell" min="1" max="60" value="15" style="width:100%"
+             oninput="document.getElementById('dwell-val').textContent=this.value">
+
+      <label>Stop radius (m): <span id="radius-val">100</span>
+        <i class="tip-icon" onmouseenter="showTip(this,`How far GPS points can spread from the cluster anchor and still count as the same place. Raise it to tolerate GPS drift; lower it to separate nearby-but-distinct locations.`)" onmouseleave="hideTip()">?</i>
+      </label>
+      <input type="range" id="preview-radius" min="10" max="500" value="100" style="width:100%"
+             oninput="document.getElementById('radius-val').textContent=this.value">
+
+      <label>Min segment time (min): <span id="min-time-val">3</span>
+        <i class="tip-icon" onmouseenter="showTip(this,`Trips shorter than this are discarded as noise — e.g. leaving home, walking 50 m, then turning back. Raise it to filter more noise; lower it to keep short trips.`)" onmouseleave="hideTip()">?</i>
+      </label>
+      <input type="range" id="preview-min-time" min="1" max="30" value="3" style="width:100%"
+             oninput="document.getElementById('min-time-val').textContent=this.value">
+
+      <label>Min segment distance (m): <span id="min-dist-val">200</span>
+        <i class="tip-icon" onmouseenter="showTip(this,`Trips where start and end stops are closer than this are discarded. Prevents tiny round-trips or GPS bounce from becoming segments. Raise it to require longer journeys.`)" onmouseleave="hideTip()">?</i>
+      </label>
+      <input type="range" id="preview-min-dist" min="50" max="1000" value="200" style="width:100%"
+             oninput="document.getElementById('min-dist-val').textContent=this.value">
+
+      <button class="btn" onclick="doSegmentPreview()">Run Preview</button>
+      <div class="result" id="preview-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- VIEW SEGMENTS -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">View Segments</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <button class="btn" onclick="doGetSegments()">GET /api/segments</button>
+      <div class="result" id="segs-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- VIEW SHARED -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">View Shared Routes</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <button class="btn" onclick="doGetShared()">GET /api/shared</button>
+      <div class="result" id="shared-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- VIEW PEOPLE -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">People on Route</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <label>Segment ID</label>
+      <input type="text" id="people-segment-id" placeholder="1">
+      <button class="btn" onclick="doGetPeople()">GET /api/people</button>
+      <div class="result" id="people-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- UPDATE PROFILE -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">Update Profile</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <label>Display Name</label>
+      <input type="text" id="profile-display-name" placeholder="Alice">
+      <label>Instagram</label>
+      <input type="text" id="profile-instagram" placeholder="alice_gram">
+      <label><input type="checkbox" id="profile-visible" checked> Is Visible</label>
+      <button class="btn" onclick="doUpdateProfile()">POST /api/profile</button>
+      <div class="result" id="profile-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- DELETE DATA -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">Delete My Data</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <p class="hint">Deletes all GPS points, segments, and shared routes. User account kept.</p>
+      <button class="btn danger" onclick="doDeleteData()">DELETE /api/data</button>
+      <div class="result" id="delete-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <div style="flex:1"></div>
+
+  <div class="map-legend">
+    <span style="background:linear-gradient(to right,hsl(220,90%,55%),hsl(0,90%,55%));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">● GPS pts</span>
+    <span style="color:#22c55e">▲ Seg start</span>
+    <span style="color:#ef4444">▼ Seg end</span>
+    <span style="color:#f97316">— Shared</span>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+<div id="map">
+  <div id="search-box">
+    <div id="search-row">
+      <input type="text" id="search-input" placeholder="Search location…" autocomplete="off"
+             onkeydown="if(event.key==='Enter') doSearch()">
+      <button id="search-btn" onclick="doSearch()">&#128269;</button>
+    </div>
+    <div id="search-results"></div>
+  </div>
+
+  <!-- GPS points panel (shown when click mode is active) -->
+  <div id="click-mode-bar">
+    <div id="cmb-header">
+      <span id="cmb-title">0 points — click map to add</span>
+      <button onclick="clearGpsInput()">Clear all</button>
+    </div>
+    <div id="cmb-list"></div>
+  </div>
+
+  <button id="clear-map-btn" onclick="clearAllMapLayers()">&#10005; Clear map</button>
+</div>
+
+<script>
+// ── Tooltip ────────────────────────────────────────────────────────────────
+const _tip = () => document.getElementById('tooltip');
+function showTip(el, text) {
+  const t = _tip();
+  t.textContent = text;
+  t.style.display = 'block';
+  moveTip(el);
+}
+function moveTip(el) {
+  const t = _tip();
+  const r = el.getBoundingClientRect();
+  let left = r.right + 8;
+  let top  = r.top - 4;
+  // Flip left if too close to right edge
+  if (left + 250 > window.innerWidth) left = r.left - 250 - 8;
+  // Clamp vertically
+  if (top + t.offsetHeight > window.innerHeight - 8) top = window.innerHeight - t.offsetHeight - 8;
+  t.style.left = left + 'px';
+  t.style.top  = top  + 'px';
+}
+function hideTip() { _tip().style.display = 'none'; }
+
+function tipIcon(text) {
+  return `<i class="tip-icon" onmouseenter="showTip(this,\`${text.replace(/`/g,"'")}\`)" onmouseleave="hideTip()">?</i>`;
+}
+
+// ── State ──────────────────────────────────────────────────────────────────
+let token = localStorage.getItem('pathpal_token') || '';
+let map, gpsLayerGroup, gpsRawLayerGroup, segLayerGroup, sharedLayerGroup, previewLayerGroup;
+let clickModeActive = false;
+let clickPoints = [];   // [{lat, lon, ts}, ...]
+let clickMarkers = [];  // parallel array of Leaflet markers
+
+// ── Init ───────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  // Map centred on Tokyo (default, will pan when data arrives)
+  map = L.map('map').setView([35.6762, 139.6503], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 19
+  }).addTo(map);
+
+  gpsLayerGroup    = L.layerGroup().addTo(map);
+  gpsRawLayerGroup = L.layerGroup().addTo(map);
+  segLayerGroup    = L.layerGroup().addTo(map);
+  sharedLayerGroup = L.layerGroup().addTo(map);
+  previewLayerGroup = L.layerGroup().addTo(map);
+
+  map.on('click', onMapClick);
+
+  // Prevent clicks inside the GPS panel from registering as map points
+  L.DomEvent.disableClickPropagation(document.getElementById('click-mode-bar'));
+
+  updateTokenDisplay();
+});
+
+function updateTokenDisplay() {
+  const el = document.getElementById('token-display');
+  el.textContent = token || '— no token —';
+}
+
+function copyToken() {
+  if (!token) return;
+  navigator.clipboard.writeText(token).then(() => {
+    const el = document.getElementById('token-display');
+    const orig = el.textContent;
+    el.textContent = '✓ copied!';
+    setTimeout(() => { el.textContent = orig; }, 1000);
+  });
+}
+
+// ── Section toggles ────────────────────────────────────────────────────────
+function toggleSection(header) {
+  header.classList.toggle('open');
+  header.nextElementSibling.classList.toggle('open');
+}
+
+// ── API helper ─────────────────────────────────────────────────────────────
+async function apiCall(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const res = await fetch('/api' + path, opts);
+  const data = await res.json();
+  return { ok: res.ok, status: res.status, data, request: { method, path, body } };
+}
+
+function showResult(elId, { ok, status, data, request }) {
+  const el = document.getElementById(elId);
+  el.style.display = 'block';
+  el.className = 'result ' + (ok ? 'ok' : 'error');
+  el.innerHTML = '';
+
+  // Tab bar
+  const tabs = document.createElement('div');
+  tabs.className = 'json-tabs';
+
+  const reqTab = document.createElement('button');
+  reqTab.className = 'json-tab active';
+  reqTab.textContent = request.method;
+
+  const resTab = document.createElement('button');
+  resTab.className = 'json-tab';
+  const sc = ok ? '#4ade80' : '#e94560';
+  resTab.innerHTML = `RESPONSE <span style="color:${sc}">${status}</span>`;
+
+  tabs.appendChild(reqTab);
+  tabs.appendChild(resTab);
+  el.appendChild(tabs);
+
+  const reqPanel = document.createElement('div');
+  reqPanel.className = 'json-panel';
+  if (request.body != null) {
+    reqPanel.appendChild(buildJsonTree(request.body));
+  } else {
+    reqPanel.innerHTML = `<span style="color:#555">${request.path}</span>`;
+  }
+
+  const resPanel = document.createElement('div');
+  resPanel.className = 'json-panel';
+  resPanel.style.display = 'none';
+  resPanel.appendChild(buildJsonTree(data));
+
+  el.appendChild(reqPanel);
+  el.appendChild(resPanel);
+
+  reqTab.onclick = () => {
+    reqPanel.style.display = ''; resPanel.style.display = 'none';
+    reqTab.classList.add('active'); resTab.classList.remove('active');
+  };
+  resTab.onclick = () => {
+    reqPanel.style.display = 'none'; resPanel.style.display = '';
+    reqTab.classList.remove('active'); resTab.classList.add('active');
+  };
+}
+
+// ── JSON tree renderer ──────────────────────────────────────────────────────
+function buildJsonTree(value) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'font-family:monospace;font-size:11px;';
+  appendNode(wrap, value, null, 0, true);
+  return wrap;
+}
+
+function appendNode(parent, value, key, depth, isLast) {
+  const indent = depth * 14;
+  const comma = isLast ? '' : '<span class="jcomma">,</span>';
+  const keyHtml = key !== null
+    ? `<span class="jk">"${key}"</span><span class="jcolon">:&nbsp;</span>`
+    : '';
+
+  if (value === null) {
+    const d = mkLine(indent);
+    d.innerHTML = keyHtml + `<span class="jn-null">null</span>` + comma;
+    parent.appendChild(d);
+  } else if (typeof value === 'boolean') {
+    const d = mkLine(indent);
+    d.innerHTML = keyHtml + `<span class="jn-bool">${value}</span>` + comma;
+    parent.appendChild(d);
+  } else if (typeof value === 'number') {
+    const d = mkLine(indent);
+    d.innerHTML = keyHtml + `<span class="jn-num">${value}</span>` + comma;
+    parent.appendChild(d);
+  } else if (typeof value === 'string') {
+    const d = mkLine(indent);
+    const esc = value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    d.innerHTML = keyHtml + `<span class="js">"${esc}"</span>` + comma;
+    parent.appendChild(d);
+  } else if (Array.isArray(value)) {
+    appendCollapsible(parent, value, key, depth, isLast, true);
+  } else {
+    appendCollapsible(parent, value, key, depth, isLast, false);
+  }
+}
+
+function appendCollapsible(parent, value, key, depth, isLast, isArray) {
+  const indent = depth * 14;
+  const open = isArray ? '[' : '{';
+  const close = isArray ? ']' : '}';
+  const comma = isLast ? '' : '<span class="jcomma">,</span>';
+  const keyHtml = key !== null
+    ? `<span class="jk">"${key}"</span><span class="jcolon">:&nbsp;</span>`
+    : '';
+  const entries = isArray ? value : Object.entries(value);
+  const count = entries.length;
+
+  // Header row
+  const header = mkLine(indent);
+  const toggle = document.createElement('span');
+  toggle.className = 'jt open';
+  toggle.textContent = '▼';
+  const label = document.createElement('span');
+  label.innerHTML = keyHtml + `<span class="jbrace">${open}</span>`;
+  const summary = document.createElement('span');
+  summary.className = 'jsummary';
+  summary.style.display = 'none';
+  summary.textContent = ` ${count} ${isArray ? 'item' : 'key'}${count !== 1 ? 's' : ''} `;
+  const closedBrace = document.createElement('span');
+  closedBrace.style.display = 'none';
+  closedBrace.innerHTML = `<span class="jbrace">${close}</span>${comma}`;
+  header.appendChild(toggle);
+  header.appendChild(label);
+  header.appendChild(summary);
+  header.appendChild(closedBrace);
+  parent.appendChild(header);
+
+  // Children
+  const body = document.createElement('div');
+  if (isArray) {
+    value.forEach((item, i) => appendNode(body, item, null, depth + 1, i === count - 1));
+  } else {
+    Object.entries(value).forEach(([k, v], i, arr) => appendNode(body, v, k, depth + 1, i === arr.length - 1));
+  }
+  parent.appendChild(body);
+
+  // Footer
+  const footer = mkLine(indent);
+  footer.innerHTML = `<span class="jbrace">${close}</span>${comma}`;
+  parent.appendChild(footer);
+
+  // Toggle collapse
+  let collapsed = false;
+  header.style.cursor = 'pointer';
+  header.addEventListener('click', e => {
+    if (e.target === toggle || e.target === header || e.target === label || e.target.closest('.jt')) {
+      collapsed = !collapsed;
+      toggle.className = 'jt ' + (collapsed ? 'closed' : 'open');
+      body.style.display = collapsed ? 'none' : '';
+      footer.style.display = collapsed ? 'none' : '';
+      summary.style.display = collapsed ? 'inline' : 'none';
+      closedBrace.style.display = collapsed ? 'inline' : 'none';
+    }
+  });
+}
+
+function mkLine(indent) {
+  const d = document.createElement('div');
+  d.className = 'jn';
+  d.style.paddingLeft = indent + 'px';
+  return d;
+}
+
+// ── Register ───────────────────────────────────────────────────────────────
+async function doRegister() {
+  const username = document.getElementById('reg-username').value.trim();
+  const password = document.getElementById('reg-password').value;
+  if (!username) { alert('Enter a username'); return; }
+  if (!password) { alert('Enter a password'); return; }
+  const r = await apiCall('POST', '/register', { username, password });
+  showResult('reg-result', r);
+  if (r.ok && r.data.user_token) {
+    token = r.data.user_token;
+    localStorage.setItem('pathpal_token', token);
+    updateTokenDisplay();
+  }
+}
+
+// ── Login ───────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  if (!username) { alert('Enter a username'); return; }
+  if (!password) { alert('Enter a password'); return; }
+  const r = await apiCall('POST', '/login', { username, password });
+  showResult('login-result', r);
+  if (r.ok && r.data.user_token) {
+    token = r.data.user_token;
+    localStorage.setItem('pathpal_token', token);
+    updateTokenDisplay();
+  }
+}
+
+// ── Click-to-add GPS ───────────────────────────────────────────────────────
+function toggleClickMode() {
+  clickModeActive = document.getElementById('gps-click-mode').checked;
+  document.getElementById('click-mode-bar').classList.toggle('visible', clickModeActive);
+  document.getElementById('click-time-opts').style.display = clickModeActive ? 'block' : 'none';
+  if (clickModeActive && !document.getElementById('click-start-time').value) {
+    // Default start time to now, rounded to the nearest minute
+    const now = new Date();
+    now.setSeconds(0, 0);
+    document.getElementById('click-start-time').value = now.toISOString().slice(0, 16);
+  }
+  renderPointsList();
+}
+
+function getSimulatedTs(index) {
+  const startVal = document.getElementById('click-start-time').value;
+  const startTime = startVal ? new Date(startVal) : new Date();
+  const stepMinutes = parseFloat(document.getElementById('click-step').value) || 1;
+  const ts = new Date(startTime.getTime() + index * stepMinutes * 60000);
+  return ts.toISOString().slice(0, 19);
+}
+
+function rebuildTimestamps() {
+  // Re-compute all timestamps when the step slider changes
+  clickPoints.forEach((pt, i) => { pt.ts = getSimulatedTs(i); });
+  rebuildGpsTextarea();
+  renderPointsList();
+}
+
+function onMapClick(e) {
+  if (!clickModeActive) return;
+  const { lat, lng } = e.latlng;
+  const ts = getSimulatedTs(clickPoints.length);
+  clickPoints.push({ lat: parseFloat(lat.toFixed(6)), lon: parseFloat(lng.toFixed(6)), ts });
+  redrawClickMarkers();
+  rebuildGpsTextarea();
+  renderPointsList();
+}
+
+// ── Haversine (JS) ─────────────────────────────────────────────────────────
+function haversineJS(lat1, lon1, lat2, lon2) {
+  const R = 6371000, r = Math.PI / 180;
+  const dLat = (lat2 - lat1) * r, dLon = (lon2 - lon1) * r;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*r) * Math.cos(lat2*r) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function fmtDist(m) {
+  return m >= 1000 ? `${(m/1000).toFixed(2)} km` : `${Math.round(m)} m`;
+}
+
+// ── Points list renderer ───────────────────────────────────────────────────
+function renderPointsList() {
+  const n = clickPoints.length;
+  document.getElementById('cmb-title').textContent =
+    n ? `${n} point${n !== 1 ? 's' : ''} — drag to reorder, click ✕ to remove`
+      : '0 points — click map to add';
+
+  const list = document.getElementById('cmb-list');
+  list.innerHTML = '';
+
+  clickPoints.forEach((pt, i) => {
+    // Distance separator between rows
+    if (i > 0) {
+      const d = haversineJS(clickPoints[i-1].lat, clickPoints[i-1].lon, pt.lat, pt.lon);
+      const sep = document.createElement('div');
+      sep.className = 'cmb-dist';
+      sep.textContent = `↕  ${fmtDist(d)}`;
+      list.appendChild(sep);
+    }
+
+    const row = document.createElement('div');
+    row.className = 'cmb-row';
+    row.draggable = true;
+    row.dataset.idx = i;
+    row.innerHTML =
+      `<span class="cmb-handle" title="Drag to reorder">⠿</span>` +
+      `<span class="cmb-num">#${i + 1}</span>` +
+      `<span class="cmb-coords"><b>lat</b> ${pt.lat} &nbsp;<b>lon</b> ${pt.lon}</span>` +
+      `<span class="cmb-ts">${pt.ts.slice(11, 19)}</span>` +
+      `<button class="cmb-del" onclick="removeClickPoint(${i})">✕</button>`;
+
+    row.addEventListener('dragstart', e => {
+      dragSrcIdx = i;
+      setTimeout(() => row.classList.add('dragging'), 0);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      list.querySelectorAll('.cmb-row').forEach(r => r.classList.remove('drag-over'));
+    });
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      list.querySelectorAll('.cmb-row').forEach(r => r.classList.remove('drag-over'));
+      row.classList.add('drag-over');
+    });
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      row.classList.remove('drag-over');
+      const toIdx = parseInt(row.dataset.idx);
+      if (dragSrcIdx === null || dragSrcIdx === toIdx) return;
+      const [moved] = clickPoints.splice(dragSrcIdx, 1);
+      clickPoints.splice(toIdx, 0, moved);
+      dragSrcIdx = null;
+      redrawClickMarkers();
+      rebuildGpsTextarea();
+      renderPointsList();
+    });
+
+    list.appendChild(row);
+  });
+
+  list.scrollTop = list.scrollHeight;
+}
+
+let dragSrcIdx = null;
+
+function removeClickPoint(idx) {
+  clickPoints.splice(idx, 1);
+  redrawClickMarkers();
+  rebuildGpsTextarea();
+  renderPointsList();
+}
+
+// ── Redraw all GPS markers from clickPoints ────────────────────────────────
+function redrawClickMarkers() {
+  gpsLayerGroup.clearLayers();
+  clickMarkers = [];
+  clickPoints.forEach((pt, i) => {
+    const m = L.circleMarker([pt.lat, pt.lon], {
+      radius: 7, color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.85, weight: 2
+    })
+    .bindTooltip(`#${i + 1}  ${pt.lat}, ${pt.lon}`, { permanent: false })
+    .addTo(gpsLayerGroup);
+    clickMarkers.push(m);
+  });
+}
+
+function rebuildGpsTextarea() {
+  document.getElementById('gps-points').value = clickPoints.map(p =>
+    JSON.stringify(p)
+  ).join('\n');
+}
+
+function clearAllMapLayers() {
+  gpsLayerGroup.clearLayers();
+  gpsRawLayerGroup.clearLayers();
+  segLayerGroup.clearLayers();
+  sharedLayerGroup.clearLayers();
+  previewLayerGroup.clearLayers();
+  if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
+}
+
+function clearGpsInput() {
+  clickPoints = [];
+  clickMarkers = [];
+  document.getElementById('gps-points').value = '';
+  document.getElementById('click-start-time').value = '';
+  gpsLayerGroup.clearLayers();
+  renderPointsList();
+}
+
+// ── Parse GPS textarea ─────────────────────────────────────────────────────
+function parseGpsInput(raw) {
+  raw = raw.trim();
+  if (!raw) return [];
+
+  // Try JSON array
+  if (raw.startsWith('[')) {
+    return JSON.parse(raw);
+  }
+
+  // Try JSON objects one per line
+  if (raw.startsWith('{')) {
+    return raw.split('\n').filter(l => l.trim()).map(l => JSON.parse(l.trim()));
+  }
+
+  // lat,lon,timestamp per line
+  return raw.split('\n').filter(l => l.trim()).map(line => {
+    const [lat, lon, ts] = line.split(',').map(s => s.trim());
+    return { lat: parseFloat(lat), lon: parseFloat(lon), ts: ts || new Date().toISOString().slice(0, 19) };
+  });
+}
+
+// ── Upload GPS ─────────────────────────────────────────────────────────────
+async function doUploadGps() {
+  if (!token) { alert('Register first to get a token'); return; }
+  const raw = document.getElementById('gps-points').value;
+  let points;
+  try { points = parseGpsInput(raw); } catch(e) { alert('Could not parse GPS input: ' + e.message); return; }
+  if (!points.length) { alert('No points to upload'); return; }
+
+  const r = await apiCall('POST', '/gps', { user_token: token, points });
+  showResult('gps-result', r);
+
+  // Draw GPS points on map
+  if (r.ok) {
+    gpsLayerGroup.clearLayers();
+    const latLngs = [];
+    points.forEach(p => {
+      const ll = [p.lat, p.lon];
+      latLngs.push(ll);
+      L.circleMarker(ll, { radius: 5, color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.7 })
+        .bindTooltip(`${p.lat}, ${p.lon}<br>${p.ts}`)
+        .addTo(gpsLayerGroup);
+    });
+    if (latLngs.length) map.fitBounds(latLngs, { padding: [40, 40] });
+
+    if (document.getElementById('gps-auto-segment').checked) {
+      await doSegmentNow();
+    }
+  }
+}
+
+// ── View GPS Points ────────────────────────────────────────────────────────
+function timeGradientColor(index, total) {
+  // Blue (220°) → Cyan (160°) → Yellow (60°) → Red (0°)
+  const t = total > 1 ? index / (total - 1) : 0;
+  const hue = Math.round(220 - t * 220);
+  const sat = 90;
+  const lit = index === 0 ? 65 : index === total - 1 ? 55 : 55;
+  return `hsl(${hue},${sat}%,${lit}%)`;
+}
+
+async function doGetGpsPoints() {
+  if (!token) { alert('No token'); return; }
+  const r = await apiCall('GET', '/gps_points?token=' + encodeURIComponent(token));
+  showResult('gps-pts-result', r);
+  if (!r.ok) return;
+
+  const pts = r.data.points;
+  const total = pts.length;
+  gpsRawLayerGroup.clearLayers();
+  if (!total) return;
+
+  const showLine   = document.getElementById('gps-pts-line').checked;
+  const showLabels = document.getElementById('gps-pts-labels').checked;
+  const latLngs = pts.map(p => [p.lat, p.lon]);
+
+  // Polyline connecting all points
+  if (showLine) {
+    L.polyline(latLngs, { color: '#475569', weight: 1.5, opacity: 0.6 })
+      .addTo(gpsRawLayerGroup);
+  }
+
+  // Draw each point with gradient color
+  pts.forEach(p => {
+    const color = timeGradientColor(p.index, total);
+    const isFirst = p.index === 0;
+    const isLast  = p.index === total - 1;
+    const radius  = isFirst || isLast ? 9 : 5;
+    const weight  = isFirst || isLast ? 2 : 1;
+
+    const timeStr = p.recorded_at ? p.recorded_at.slice(11, 19) : '—';
+    const tooltip = `<b>#${p.index + 1}</b> of ${total}<br>${p.lat}, ${p.lon}<br>${timeStr}`;
+
+    const marker = L.circleMarker([p.lat, p.lon], {
+      radius, color: '#000', weight,
+      fillColor: color, fillOpacity: 0.92,
+    }).bindTooltip(tooltip, { sticky: true }).addTo(gpsRawLayerGroup);
+
+    // Label div for first, last, and every ~10th point
+    if (showLabels || isFirst || isLast) {
+      const labelText = isFirst ? '▶ start' : isLast ? '⬛ end' : `#${p.index + 1}`;
+      L.marker([p.lat, p.lon], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="color:#fff;font-size:9px;background:${color};padding:1px 4px;
+                 border-radius:3px;border:1px solid rgba(0,0,0,0.4);white-space:nowrap;
+                 margin-top:${isFirst || isLast ? 11 : 7}px;margin-left:8px">${labelText}</div>`,
+          iconAnchor: [0, 0],
+        }),
+        interactive: false,
+      }).addTo(gpsRawLayerGroup);
+    }
+  });
+
+  map.fitBounds(latLngs, { padding: [40, 40] });
+}
+
+// ── Segment Now ────────────────────────────────────────────────────────────
+async function doSegmentNow() {
+  if (!token) { alert('No token'); return; }
+  const r = await apiCall('POST', '/segment_now', { user_token: token });
+  showResult('seg-now-result', r);
+  if (r.ok) doGetSegments();
+}
+
+// ── View Segments ──────────────────────────────────────────────────────────
+async function doGetSegments() {
+  if (!token) { alert('No token'); return; }
+  const r = await apiCall('GET', '/segments?token=' + encodeURIComponent(token));
+  showResult('segs-result', r);
+
+  if (r.ok && r.data.segments) {
+    segLayerGroup.clearLayers();
+    const bounds = [];
+    r.data.segments.forEach(seg => drawSegment(seg, bounds));
+    if (bounds.length) map.fitBounds(bounds, { padding: [40, 40] });
+  }
+}
+
+function drawSegment(seg, boundsArr) {
+  if (seg.start_lat == null || seg.end_lat == null) return;
+  const start = [seg.start_lat, seg.start_lon];
+  const end   = [seg.end_lat,   seg.end_lon];
+  boundsArr && boundsArr.push(start, end);
+
+  // Green start marker
+  L.marker(start, { icon: makeIcon('#22c55e', '▲') })
+    .bindPopup(`<b>${seg.start_label}</b><br>Seg #${seg.id}<br>${seg.date || ''} ${seg.start_time || ''}<br>× ${seg.occurrence_count}`)
+    .addTo(segLayerGroup);
+
+  // Red end marker
+  L.marker(end, { icon: makeIcon('#ef4444', '▼') })
+    .bindPopup(`<b>${seg.end_label}</b><br>Seg #${seg.id}<br>${seg.date || ''} ${seg.end_time || ''}`)
+    .addTo(segLayerGroup);
+
+  // Dashed polyline
+  L.polyline([start, end], { color: '#60a5fa', dashArray: '6 6', weight: 2 })
+    .bindTooltip(`${seg.start_label} → ${seg.end_label}`)
+    .addTo(segLayerGroup);
+}
+
+function makeIcon(color, symbol) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="color:${color};font-size:18px;line-height:1;filter:drop-shadow(0 0 3px #000)">${symbol}</div>`,
+    iconAnchor: [9, 9],
+  });
+}
+
+// ── View Shared ────────────────────────────────────────────────────────────
+async function doGetShared() {
+  if (!token) { alert('No token'); return; }
+  const r = await apiCall('GET', '/shared?token=' + encodeURIComponent(token));
+  showResult('shared-result', r);
+
+  if (r.ok && r.data.shared) {
+    sharedLayerGroup.clearLayers();
+    r.data.shared.forEach(s => drawShared(s));
+  }
+}
+
+function drawShared(s) {
+  if (s.canonical_start_lat == null) return;
+  const start = [s.canonical_start_lat, s.canonical_start_lon];
+  const end   = [s.canonical_end_lat,   s.canonical_end_lon];
+
+  L.polyline([start, end], { color: '#f97316', weight: 4, opacity: 0.85 })
+    .bindPopup(`<b>${s.start_label} → ${s.end_label}</b><br>${s.match_count} match(es)<br>Seg #${s.segment_id}`)
+    .addTo(sharedLayerGroup);
+
+  L.circleMarker(start, { radius: 6, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.9 }).addTo(sharedLayerGroup);
+  L.circleMarker(end,   { radius: 6, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.9 }).addTo(sharedLayerGroup);
+}
+
+// ── People on Route ────────────────────────────────────────────────────────
+async function doGetPeople() {
+  if (!token) { alert('No token'); return; }
+  const segId = document.getElementById('people-segment-id').value.trim();
+  if (!segId) { alert('Enter a segment ID'); return; }
+  const r = await apiCall('GET', `/people?token=${encodeURIComponent(token)}&segment_id=${segId}`);
+  showResult('people-result', r);
+
+  // Annotate existing shared lines with people names
+  if (r.ok && r.data.people && r.data.people.length) {
+    sharedLayerGroup.eachLayer(layer => {
+      if (layer instanceof L.Polyline) {
+        const names = r.data.people.map(p => p.display_name || '?').join(', ');
+        layer.bindPopup(layer.getPopup().getContent() + `<br><b>People:</b> ${names}`);
+      }
+    });
+  }
+}
+
+// ── Update Profile ─────────────────────────────────────────────────────────
+async function doUpdateProfile() {
+  if (!token) { alert('No token'); return; }
+  const body = { user_token: token };
+  const dn = document.getElementById('profile-display-name').value.trim();
+  const ig = document.getElementById('profile-instagram').value.trim();
+  if (dn) body.display_name = dn;
+  if (ig) body.instagram = ig;
+  body.is_visible = document.getElementById('profile-visible').checked;
+  const r = await apiCall('POST', '/profile', body);
+  showResult('profile-result', r);
+}
+
+// ── Delete Data ────────────────────────────────────────────────────────────
+async function doDeleteData() {
+  if (!token) { alert('No token'); return; }
+  if (!confirm('Delete all GPS points, segments, and shared routes for this user?')) return;
+  const r = await apiCall('DELETE', '/data', { user_token: token });
+  showResult('delete-result', r);
+  if (r.ok) {
+    gpsLayerGroup.clearLayers();
+    segLayerGroup.clearLayers();
+    sharedLayerGroup.clearLayers();
+  }
+}
+
+// ── Location search (Nominatim) ────────────────────────────────────────────
+let searchMarker = null;
+
+async function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  const resultsEl = document.getElementById('search-results');
+  resultsEl.style.display = 'block';
+  resultsEl.innerHTML = '<div id="search-status">Searching…</div>';
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const results = await res.json();
+
+    if (!results.length) {
+      resultsEl.innerHTML = '<div id="search-status">No results found.</div>';
+      return;
+    }
+
+    resultsEl.innerHTML = '';
+    results.forEach(r => {
+      const div = document.createElement('div');
+      div.className = 'search-result-item';
+      const shortType = r.type ? `<span style="color:#555"> · ${r.type}</span>` : '';
+      div.innerHTML = `<span class="place-name">${r.display_name.split(',')[0]}</span>${shortType}<br>
+                       <span style="color:#555">${r.display_name}</span>`;
+      div.onclick = () => selectSearchResult(r);
+      resultsEl.appendChild(div);
+    });
+  } catch(e) {
+    resultsEl.innerHTML = `<div id="search-status" style="color:#e94560">Error: ${e.message}</div>`;
+  }
+}
+
+function selectSearchResult(r) {
+  const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+
+  // Remove previous search marker
+  if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
+
+  // Drop a purple pin
+  searchMarker = L.marker([lat, lon], { icon: makeIcon('#a855f7', '📍') })
+    .bindPopup(`<b>${r.display_name.split(',')[0]}</b><br>${r.display_name}<br><small>${lat.toFixed(5)}, ${lon.toFixed(5)}</small>`)
+    .addTo(map)
+    .openPopup();
+
+  // Zoom to the result's bounding box if available, otherwise setView
+  if (r.boundingbox) {
+    const bb = r.boundingbox.map(Number);
+    map.fitBounds([[bb[0], bb[2]], [bb[1], bb[3]]], { maxZoom: 16 });
+  } else {
+    map.setView([lat, lon], 15);
+  }
+
+  // Close dropdown
+  document.getElementById('search-results').style.display = 'none';
+}
+
+// ── Segment Preview ────────────────────────────────────────────────────────
+const PREVIEW_PALETTE = ['#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#10b981', '#f97316'];
+
+async function doSegmentPreview() {
+  if (!token) { alert('Register first to get a token'); return; }
+
+  const body = {
+    user_token:      token,
+    dwell_minutes:   parseFloat(document.getElementById('preview-dwell').value),
+    stop_radius:     parseFloat(document.getElementById('preview-radius').value),
+    min_seg_minutes: parseFloat(document.getElementById('preview-min-time').value),
+    min_seg_metres:  parseFloat(document.getElementById('preview-min-dist').value),
+  };
+
+  const r = await apiCall('POST', '/segment_preview', body);
+
+  const resultEl = document.getElementById('preview-result');
+  resultEl.style.display = 'block';
+
+  if (!r.ok) {
+    showResult('preview-result', r);
+    return;
+  }
+
+  const d = r.data;
+  resultEl.className = 'result ok';
+  resultEl.innerHTML = '';
+
+  // Summary bar: show raw stops → merged places
+  const merged = d.places_found < d.stops_found;
+  const summaryBar = document.createElement('div');
+  summaryBar.style.cssText = 'padding:6px 8px; color:#4ade80; border-bottom:1px solid #0f3460; line-height:1.7;';
+  summaryBar.innerHTML =
+    `${d.stops_found} raw stop${d.stops_found !== 1 ? 's' : ''}` +
+    (merged
+      ? ` → <b style="color:#f59e0b">${d.places_found} place${d.places_found !== 1 ? 's' : ''} after merge</b>`
+      : ` (no merges)`) +
+    `&nbsp;&nbsp;·&nbsp;&nbsp;${d.segments_passed} passed&nbsp;&nbsp;·&nbsp;&nbsp;${d.segments_rejected} rejected` +
+    `&nbsp;&nbsp;·&nbsp;&nbsp;${d.total_points} pts`;
+  resultEl.appendChild(summaryBar);
+  const treePanel = document.createElement('div');
+  treePanel.className = 'json-panel';
+  treePanel.appendChild(buildJsonTree(d));
+  resultEl.appendChild(treePanel);
+
+  previewLayerGroup.clearLayers();
+  const stopRadius = body.stop_radius;
+
+  // ── Layer 1: raw stops (small, semi-transparent, colored by place) ──────
+  d.stops.forEach((stop, si) => {
+    const color = PREVIEW_PALETTE[stop.place_index % PREVIEW_PALETTE.length];
+    const ll = [stop.centroid_lat, stop.centroid_lon];
+
+    // Thin radius ring
+    L.circle(ll, { radius: stopRadius, color, weight: 1, fillOpacity: 0.04, dashArray: '4 4' })
+      .addTo(previewLayerGroup);
+
+    // Small raw-stop dot
+    L.circleMarker(ll, { radius: 6, color, weight: 1, fillColor: color, fillOpacity: 0.5 })
+      .bindTooltip(`Raw stop #${si + 1}<br>${stop.label}<br>${stop.duration_minutes} min · ${stop.start_time}–${stop.end_time}`, { sticky: true })
+      .addTo(previewLayerGroup);
+
+    // Dashed line from raw stop centroid to merged place centroid (only when they differ)
+    const place = d.merged_places[stop.place_index];
+    const pll = [place.centroid_lat, place.centroid_lon];
+    if (stop.centroid_lat !== place.centroid_lat || stop.centroid_lon !== place.centroid_lon) {
+      L.polyline([ll, pll], { color, weight: 1, dashArray: '3 5', opacity: 0.5 })
+        .addTo(previewLayerGroup);
+    }
+  });
+
+  // ── Layer 2: merged places (large, solid, labeled) ──────────────────────
+  d.merged_places.forEach((place, pi) => {
+    const color = PREVIEW_PALETTE[pi % PREVIEW_PALETTE.length];
+    const ll = [place.centroid_lat, place.centroid_lon];
+    const visits = place.visit_count;
+    const popupText =
+      `<b>${place.label}</b><br>` +
+      `${visits} visit${visits !== 1 ? 's' : ''} (merged from ${place.stop_indices.length} stop${place.stop_indices.length !== 1 ? 's' : ''})`;
+
+    // Solid merge-radius ring
+    L.circle(ll, { radius: stopRadius, color, weight: 2, fillOpacity: 0.08 })
+      .bindPopup(`Merge radius: ${stopRadius} m`)
+      .addTo(previewLayerGroup);
+
+    // Large place marker
+    L.circleMarker(ll, { radius: 14, color: '#000', weight: 2, fillColor: color, fillOpacity: 0.95 })
+      .bindPopup(popupText)
+      .addTo(previewLayerGroup);
+
+    // Visit-count badge
+    L.marker(ll, {
+      icon: L.divIcon({
+        className: '',
+        html: `<div style="color:#fff;font-size:10px;font-weight:bold;white-space:nowrap;` +
+              `background:${color};padding:2px 5px;border-radius:3px;border:1px solid #000;` +
+              `margin-top:-22px;margin-left:16px">` +
+              `${place.label}` +
+              (visits > 1 ? ` <span style="opacity:.75">×${visits}</span>` : '') +
+              `</div>`,
+        iconAnchor: [0, 0],
+      }),
+      interactive: false,
+    }).addTo(previewLayerGroup);
+  });
+
+  // ── Layer 3: segment candidates ─────────────────────────────────────────
+  d.segment_candidates.forEach(seg => {
+    const start = [seg.start_lat, seg.start_lon];
+    const end   = [seg.end_lat,   seg.end_lon];
+
+    if (seg.passed) {
+      L.polyline([start, end], { color: '#22c55e', weight: 3 })
+        .bindPopup(`${seg.start_label} → ${seg.end_label}<br>${seg.duration_minutes} min · ${seg.distance_metres} m ✓`)
+        .addTo(previewLayerGroup);
+    } else {
+      L.polyline([start, end], { color: '#ef4444', weight: 2, dashArray: '6 4' })
+        .bindPopup(`${seg.start_label} → ${seg.end_label}<br>✗ ${seg.reject_reason}`)
+        .addTo(previewLayerGroup);
+    }
+  });
+
+  if (d.merged_places.length) {
+    const lls = d.merged_places.map(p => [p.centroid_lat, p.centroid_lon]);
+    map.fitBounds(lls, { padding: [60, 60] });
+  }
+}
+
+// Close dropdown when clicking elsewhere on the map
+document.addEventListener('click', e => {
+  const box = document.getElementById('search-box');
+  if (box && !box.contains(e.target)) {
+    document.getElementById('search-results').style.display = 'none';
+  }
+});
+</script>
+</body>
+</html>
