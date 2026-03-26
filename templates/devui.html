@@ -333,6 +333,18 @@
     </div>
   </div>
 
+  <!-- VIEW STOPS -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="title">View Stops</span><span class="arrow">▶</span>
+    </div>
+    <div class="section-body">
+      <p class="hint">Fetches detected stops and draws them on the map as labeled circles.</p>
+      <button class="btn" onclick="doGetStops()">GET /api/stops</button>
+      <div class="result" id="stops-result" style="display:none"></div>
+    </div>
+  </div>
+
   <!-- VIEW SEGMENTS -->
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
@@ -402,6 +414,7 @@
     <span style="background:linear-gradient(to right,hsl(220,90%,55%),hsl(0,90%,55%));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">● GPS pts</span>
     <span style="color:#22c55e">▲ Seg start</span>
     <span style="color:#ef4444">▼ Seg end</span>
+    <span style="color:#a78bfa">● Stops</span>
     <span style="color:#f97316">— Shared</span>
   </div>
 </div>
@@ -458,7 +471,7 @@ function tipIcon(text) {
 
 // ── State ──────────────────────────────────────────────────────────────────
 let token = localStorage.getItem('pathpal_token') || '';
-let map, gpsLayerGroup, gpsRawLayerGroup, segLayerGroup, sharedLayerGroup, previewLayerGroup;
+let map, gpsLayerGroup, gpsRawLayerGroup, segLayerGroup, sharedLayerGroup, previewLayerGroup, stopsLayerGroup;
 let clickModeActive = false;
 let clickPoints = [];   // [{lat, lon, ts}, ...]
 let clickMarkers = [];  // parallel array of Leaflet markers
@@ -476,6 +489,7 @@ window.addEventListener('DOMContentLoaded', () => {
   segLayerGroup    = L.layerGroup().addTo(map);
   sharedLayerGroup = L.layerGroup().addTo(map);
   previewLayerGroup = L.layerGroup().addTo(map);
+  stopsLayerGroup   = L.layerGroup().addTo(map);
 
   map.on('click', onMapClick);
 
@@ -849,6 +863,7 @@ function clearAllMapLayers() {
   segLayerGroup.clearLayers();
   sharedLayerGroup.clearLayers();
   previewLayerGroup.clearLayers();
+  stopsLayerGroup.clearLayers();
   if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
 }
 
@@ -985,6 +1000,30 @@ async function doSegmentNow() {
   const r = await apiCall('POST', '/segment_now', { user_token: token });
   showResult('seg-now-result', r);
   if (r.ok) doGetSegments();
+}
+
+// ── View Stops ─────────────────────────────────────────────────────────────
+const STOP_COLORS = ['#a78bfa','#f472b6','#38bdf8','#facc15','#34d399','#fb923c','#f87171','#818cf8'];
+
+async function doGetStops() {
+  if (!token) { alert('No token'); return; }
+  const r = await apiCall('GET', '/stops?token=' + encodeURIComponent(token));
+  showResult('stops-result', r);
+
+  if (r.ok && r.data.stops) {
+    stopsLayerGroup.clearLayers();
+    const bounds = [];
+    r.data.stops.forEach(s => {
+      const ll = [s.centroid_lat, s.centroid_lon];
+      bounds.push(ll);
+      const color = STOP_COLORS[s.place_index % STOP_COLORS.length];
+      L.circleMarker(ll, { radius: 9, color: color, fillColor: color, fillOpacity: 0.75, weight: 2 })
+        .bindPopup(`<b>${s.label}</b><br>${s.start_time} – ${s.end_time}<br>${s.duration_minutes} min · ${s.point_count} pts`)
+        .bindTooltip(s.label, { permanent: true, direction: 'top', offset: [0, -8], className: '' })
+        .addTo(stopsLayerGroup);
+    });
+    if (bounds.length) map.fitBounds(bounds, { padding: [40, 40] });
+  }
 }
 
 // ── View Segments ──────────────────────────────────────────────────────────

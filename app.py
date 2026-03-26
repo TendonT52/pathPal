@@ -304,6 +304,44 @@ def get_gps_points():
 
 
 # ---------------------------------------------------------------------------
+# Stops
+# ---------------------------------------------------------------------------
+
+@app.route("/api/stops")
+def get_stops():
+    from segmentation import detect_stops, merge_stops, label_places, haversine, DWELL_MINUTES
+
+    user = get_user_by_token(request.args.get("token"))
+    if not user:
+        return jsonify({"error": "invalid token"}), 401
+
+    raw_points = (
+        GpsPoint.query
+        .filter_by(user_id=user.id)
+        .order_by(GpsPoint.recorded_at)
+        .all()
+    )
+    points = [
+        {"lat": p.latitude, "lon": p.longitude, "recorded_at": p.recorded_at}
+        for p in raw_points
+    ]
+
+    stops = detect_stops(points, dwell_minutes=DWELL_MINUTES)
+    places, stop_to_place = merge_stops(stops)
+    place_labels = label_places(places)
+
+    seen = set()
+    names = []
+    for i, stop in enumerate(stops):
+        label = place_labels[stop_to_place[i]]
+        if label not in seen:
+            seen.add(label)
+            names.append(label)
+
+    return jsonify({"stops": names})
+
+
+# ---------------------------------------------------------------------------
 # Step 8 — Get Segments
 # ---------------------------------------------------------------------------
 
